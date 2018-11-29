@@ -1,0 +1,44 @@
+{
+  "name": "bs58-rn",
+  "version": "0.0.1",
+  "description": "Fast base encoding / decoding of any given alphabet",
+  "keywords": [
+    "base-x",
+    "base58",
+    "base62",
+    "base64",
+    "crypto",
+    "crytography",
+    "decode",
+    "decoding",
+    "encode",
+    "encoding"
+  ],
+  "homepage": "https://github.com/benyasin/bs58-rn",
+  "bugs": {
+    "url": "https://github.com/benyasin/bs58-rn/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Cousens",
+  "files": [
+    "index.js"
+  ],
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/benyasin/bs58-rn.git"
+  },
+  "scripts": {
+    "standard": "standard",
+    "test": "npm run unit && npm run standard",
+    "unit": "tape test/*.js"
+  },
+  "devDependencies": {
+    "standard": "^10.0.3",
+    "tape": "^4.5.1"
+  },
+  "dependencies": {
+    "bigi": "^1.4.2",
+    "crypto": "^1.0.1"
+  }
+}
