@@ -1,6 +1,6 @@
 {
   "name": "bs58-rn",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Fast base encoding / decoding of any given alphabet",
   "keywords": [
     "base-x",

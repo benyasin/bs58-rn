@@ -24,16 +24,16 @@ var base58 = {
       str = new Buffer(buf.length << 1);
     }
     var i = str.length - 1;
-    while(x.gt(0)) {
+    while(x.compareTo(0) > 0) {
       r = x.mod(58);
-      x = x.div(58);
+      x = x.divide(58);
       str[i] = ALPHABET_BUF[r.toNumber()];
       i--;
     }
 
     // deal with leading zeros
     var j=0;
-    while(buf[j] == 0) {
+    while(buf[j] === 0) {
       str[i] = ALPHABET_BUF[0];
       j++; i--;
     }
@@ -42,20 +42,20 @@ var base58 = {
   },
 
   decode: function(str) {
-    if(str.length == 0) return zerobuf;
+    if(str.length === 0) return zerobuf;
     var answer = bignum(0);
     for(var i=0; i<str.length; i++) {
-      answer = answer.mul(58);
+      answer = answer.multiply(58);
       answer = answer.add(ALPHABET_INV[str[i]]);
     };
     var i = 0;
-    while(i < str.length && str[i] == ALPHABET_ZERO) {
+    while(i < str.length && str[i] === ALPHABET_ZERO) {
       i++;
     }
     if(i > 0) {
       var zb = new Buffer(i);
       zb.fill(0);
-      if(i == str.length) return zb;
+      if(i === str.length) return zb;
       answer = answer.toBuffer();
       return Buffer.concat([zb, answer], i+answer.length);
     } else {
@@ -94,7 +94,7 @@ var base58Check = {
     var hash = doubleSHA256(data);
     var hash4 = hash.slice(0, 4);
 
-    if (csum.toString() != hash4.toString()) {
+    if (csum.toString() !== hash4.toString()) {
       throw new Error("checksum mismatch");
     }
 
