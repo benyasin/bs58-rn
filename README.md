@@ -50,7 +50,3 @@ character.
 While unusual, this does mean that no padding is required and it works for bases
 like 43. **If you need standard hex encoding, or base64 encoding, this module is NOT
 appropriate.**
-
-
-## LICENSE [MIT](LICENSE)
-A direct derivation of the base58 implementation from [`bitcoin/bitcoin`](https://github.com/bitcoin/bitcoin/blob/f1e2f2a85962c1664e4e55471061af0eaa798d40/src/base58.cpp),  generalized for variable length alphabets.
