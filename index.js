@@ -1,115 +1,150 @@
-var crypto = require('crypto');
-var bignum = require('bigi');
+// base-x encoding / decoding
+// Copyright (c) 2018 base-x contributors
+// Copyright (c) 2014-2018 The Bitcoin Core developers (base58.cpp)
+// Distributed under the MIT software license, see the accompanying
+// file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 
-var globalBuffer = new Buffer(1024);
-var zerobuf = new Buffer(0);
-var ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-var ALPHABET_ZERO = ALPHABET[0];
-var ALPHABET_BUF = new Buffer(ALPHABET, 'ascii');
-var ALPHABET_INV = {};
-for(var i=0; i < ALPHABET.length; i++) {
-  ALPHABET_INV[ALPHABET[i]] = i;
-};
+const Buffer = require('safe-buffer').Buffer
 
-// Vanilla Base58 Encoding
-var base58 = {
-  encode: function(buf) {
-    var str;
-    var x = bignum.fromBuffer(buf);
-    var r;
+module.exports = function base (ALPHABET) {
+  if (ALPHABET.length >= 255) throw new TypeError('Alphabet too long')
 
-    if(buf.length < 512) {
-      str = globalBuffer;
-    } else {
-      str = new Buffer(buf.length << 1);
-    }
-    var i = str.length - 1;
-    while(x.compareTo(0) > 0) {
-      r = x.mod(58);
-      x = x.divide(58);
-      str[i] = ALPHABET_BUF[r.toNumber()];
-      i--;
-    }
+  const BASE_MAP = new Buffer(256)
+  BASE_MAP.fill(255)
 
-    // deal with leading zeros
-    var j=0;
-    while(buf[j] === 0) {
-      str[i] = ALPHABET_BUF[0];
-      j++; i--;
-    }
+  for (let i = 0; i < ALPHABET.length; i++) {
+    const x = ALPHABET.charAt(i)
+    const xc = x.charCodeAt(0)
 
-    return str.slice(i+1,str.length).toString('ascii');
-  },
+    if (BASE_MAP[xc] !== 255) throw new TypeError(x + ' is ambiguous')
+    BASE_MAP[xc] = i
+  }
 
-  decode: function(str) {
-    if(str.length === 0) return zerobuf;
-    var answer = bignum(0);
-    for(var i=0; i<str.length; i++) {
-      answer = answer.multiply(58);
-      answer = answer.add(ALPHABET_INV[str[i]]);
-    };
-    var i = 0;
-    while(i < str.length && str[i] === ALPHABET_ZERO) {
-      i++;
-    }
-    if(i > 0) {
-      var zb = new Buffer(i);
-      zb.fill(0);
-      if(i === str.length) return zb;
-      answer = answer.toBuffer();
-      return Buffer.concat([zb, answer], i+answer.length);
-    } else {
-      return answer.toBuffer();
-    }
-  },
-};
+  const BASE = ALPHABET.length
+  const LEADER = ALPHABET.charAt(0)
+  const FACTOR = Math.log(BASE) / Math.log(256) // log(BASE) / log(256), rounded up
+  const iFACTOR = Math.log(256) / Math.log(BASE) // log(256) / log(BASE), rounded up
 
-// Base58Check Encoding
-function sha256(data) {
-  return new Buffer(crypto.createHash('sha256').update(data).digest('binary'), 'binary');
-};
+  function encode (source) {
+    if (!Buffer.isBuffer(source)) throw new TypeError('Expected Buffer')
+    if (source.length === 0) return ''
 
-function doubleSHA256(data) {
-  return sha256(sha256(data));
-};
+    // Skip & count leading zeroes.
+    let zeroes = 0
+    let length = 0
+    let pbegin = 0
+    const pend = source.length
 
-var base58Check = {
-  encode: function(buf) {
-    var checkedBuf = new Buffer(buf.length + 4);
-    var hash = doubleSHA256(buf);
-    buf.copy(checkedBuf);
-    hash.copy(checkedBuf, buf.length);
-    return base58.encode(checkedBuf);
-  },
-
-  decode: function(s) {
-    var buf = base58.decode(s);
-    if (buf.length < 4) {
-      throw new Error("invalid input: too short");
+    while (pbegin !== pend && source[pbegin] === 0) {
+      pbegin++
+      zeroes++
     }
 
-    var data = buf.slice(0, -4);
-    var csum = buf.slice(-4);
+    // Allocate enough space in big-endian base58 representation.
+    const size = ((pend - pbegin) * iFACTOR + 1) >>> 0
+    const b58 = new Buffer(size)
 
-    var hash = doubleSHA256(data);
-    var hash4 = hash.slice(0, 4);
+    // Process the bytes.
+    while (pbegin !== pend) {
+      let carry = source[pbegin]
 
-    if (csum.toString() !== hash4.toString()) {
-      throw new Error("checksum mismatch");
+      // Apply "b58 = b58 * 256 + ch".
+      let i = 0
+      for (let it = size - 1; (carry !== 0 || i < length) && (it !== -1); it--, i++) {
+        carry += (256 * b58[it]) >>> 0
+        b58[it] = (carry % BASE) >>> 0
+        carry = (carry / BASE) >>> 0
+      }
+
+      if (carry !== 0) throw new Error('Non-zero carry')
+      length = i
+      pbegin++
     }
 
-    return data;
-  },
-};
+    // Skip leading zeroes in base58 result.
+    let it = size - length
+    while (it !== size && b58[it] === 0) {
+      it++
+    }
 
-// if you frequently do base58 encodings with data larger
-// than 512 bytes, you can use this method to expand the
-// size of the reusable buffer
-exports.setBuffer = function(buf) {
-  globalBuffer = buf;
-};
+    // Translate the result into a string.
+    let str = LEADER.repeat(zeroes)
+    for (; it < size; ++it) str += ALPHABET.charAt(b58[it])
 
-exports.base58 = base58;
-exports.base58Check = base58Check;
-exports.encode = base58.encode;
-exports.decode = base58.decode;
+    return str
+  }
+
+  function decodeUnsafe (source) {
+    if (typeof source !== 'string') throw new TypeError('Expected String')
+    if (source.length === 0) return Buffer.alloc(0)
+
+    let psz = 0
+
+    // Skip leading spaces.
+    if (source[psz] === ' ') return
+
+    // Skip and count leading '1's.
+    let zeroes = 0
+    let length = 0
+    while (source[psz] === LEADER) {
+      zeroes++
+      psz++
+    }
+
+    // Allocate enough space in big-endian base256 representation.
+    const size = (((source.length - psz) * FACTOR) + 1) >>> 0 // log(58) / log(256), rounded up.
+    const b256 = new Buffer(size)
+
+    // Process the characters.
+    while (source[psz]) {
+      // Decode character
+      let carry = BASE_MAP[source.charCodeAt(psz)]
+
+      // Invalid character
+      if (carry === 255) return
+
+      let i = 0
+      for (let it = size - 1; (carry !== 0 || i < length) && (it !== -1); it--, i++) {
+        carry += (BASE * b256[it]) >>> 0
+        b256[it] = (carry % 256) >>> 0
+        carry = (carry / 256) >>> 0
+      }
+
+      if (carry !== 0) throw new Error('Non-zero carry')
+      length = i
+      psz++
+    }
+
+    // Skip trailing spaces.
+    if (source[psz] === ' ') return
+
+    // Skip leading zeroes in b256.
+    let it = size - length
+    while (it !== size && b256[it] === 0) {
+      it++
+    }
+
+    const vch = Buffer.allocUnsafe(zeroes + (size - it))
+    vch.fill(0x00, 0, zeroes)
+
+    let j = zeroes
+    while (it !== size) {
+      vch[j++] = b256[it++]
+    }
+
+    return vch
+  }
+
+  function decode (string) {
+    const buffer = decodeUnsafe(string)
+    if (buffer) return buffer
+
+    throw new Error('Non-base' + BASE + ' character')
+  }
+
+  return {
+    encode: encode,
+    decodeUnsafe: decodeUnsafe,
+    decode: decode
+  }
+}

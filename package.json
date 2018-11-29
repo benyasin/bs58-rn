@@ -1,9 +1,8 @@
 {
   "name": "bs58-rn",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Fast base encoding / decoding of any given alphabet",
   "keywords": [
-    "base-x",
     "base58",
     "base62",
     "base64",
@@ -38,7 +37,6 @@
     "tape": "^4.5.1"
   },
   "dependencies": {
-    "bigi": "^1.4.2",
-    "crypto": "^1.0.1"
+    "safe-buffer": "^5.1.2"
   }
 }
